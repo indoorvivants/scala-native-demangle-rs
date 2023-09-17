@@ -71,7 +71,27 @@ fn sig_name(input: &str) -> ParsingResult {
 
         let after_types = &after_name[consumed + 1..];
         let sc = scope(&after_types);
-        return type_names.map(|vc| format!("{}({})", nm.unwrap(), vc.join(",")));
+
+        type_names.and_then(|tn| {
+            nm.and_then(|nm| {
+                sc.map(|sc| {
+                    let signature = match tn.len() {
+                        1 => format!("{}: {}", nm, tn.join(",")),
+                        n => format!(
+                            "{}({}): {}",
+                            nm,
+                            tn[0..n - 2].join(","),
+                            tn.get(n - 1).unwrap()
+                        ),
+                    };
+
+                    return signature;
+                })
+            })
+        })
+        // format!("{}({})", nm, tn.join(","))})))
+
+        // return type_names.map(|vc| format!("{}({})", nm.unwrap(), vc.join(",")));
     } else {
         return Err(
             format!("sig_name: expected to start with F/R/D/P/C/G/K, {}", &input).to_string(),
@@ -218,12 +238,10 @@ mod tests {
 
     #[test]
     fn it_works() {
-        // let result = demangle("_SM13os.Internals$D19transfer$$anonfun$1L20java.io.OutputStreamLAb_iuEPT13os.Internals$").unwrap();
-
-        // assert_eq!(run("_ST10__dispatch"), "__dispatch");
+        assert_eq!(run("_ST10__dispatch"), "__dispatch");
         assert_eq!(
             run("_SM42sttp.model.headers.CacheDirective$MinFreshD12productArityiEO"),
-            "bla"
+            "sttp.model.headers.CacheDirective$MinFresh.productArity: scala.Int"
         )
     }
 }
