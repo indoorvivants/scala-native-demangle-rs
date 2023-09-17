@@ -61,7 +61,7 @@ fn sig_name(input: &str) -> ParsingResult {
         });
     } else if input.starts_with("R") {
         let type_names = read_type_names(&input[1..]);
-        return type_names.1.map(|vc| vc.join(","));
+        return type_names.1.map(|vc| vc.join(", "));
     } else if input.starts_with("D") {
         let after_tag = &input[1..];
         let (consumed, nm) = name(after_tag);
@@ -242,6 +242,12 @@ mod tests {
         assert_eq!(
             run("_SM42sttp.model.headers.CacheDirective$MinFreshD12productArityiEO"),
             "sttp.model.headers.CacheDirective$MinFresh.productArity: scala.Int"
-        )
+        );
+
+        assert_eq!(run("_SM42scala.scalanative.runtime.SymbolFormatter$D10inBounds$1L32scala.scalanative.unsigned.ULongizEPT42scala.scalanative.runtime.SymbolFormatter$"), 
+            "scala.scalanative.runtime.SymbolFormatter$.inBounds$1(scala.scalanative.unsigned.ULong): scala.Boolean");
+
+        assert_eq!(run("_SM42scala.scalanative.runtime.SymbolFormatter$D11readIdent$1L28scala.scalanative.unsafe.PtrL32scala.scalanative.unsigned.ULongL20scala.runtime.IntRefL28scala.scalanative.unsafe.PtruEPT42scala.scalanative.runtime.SymbolFormatter$"), 
+            "scala.scalanative.runtime.SymbolFormatter$.readIdent$1(scala.scalanative.unsafe.Ptr,scala.scalanative.unsigned.ULong,scala.runtime.IntRef): scala.Unit")
     }
 }
