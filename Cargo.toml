@@ -1,7 +1,13 @@
 [package]
 name = "scala-native-demangle"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+license = "Apache-2.0"
+description = "Demangle Scala Native identifiers"
+homepage = "https://github.com/indoorvivants/scala-native-demangle"
+repository = "https://github.com/indoorvivants/scala-native-demangle"
+readme = "README.md"
+keywords = ["scala", "scala-native", "demangler"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
