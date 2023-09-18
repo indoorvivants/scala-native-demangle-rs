@@ -246,11 +246,9 @@ mod tests {
         );
 
         assert_eq!(run("_SM42scala.scalanative.runtime.SymbolFormatter$D10inBounds$1L32scala.scalanative.unsigned.ULongizEPT42scala.scalanative.runtime.SymbolFormatter$"), 
-            "scala.scalanative.runtime.SymbolFormatter$.inBounds$1(scala.scalanative.unsigned.ULong): scala.Boolean");
+            "scala.scalanative.runtime.SymbolFormatter$.<private[scala.scalanative.runtime.SymbolFormatter$]>inBounds$1(scala.scalanative.unsigned.ULong): scala.Boolean");
 
-        assert_eq!(run("_SM42scala.scalanative.runtime.SymbolFormatter$D11readIdent$1L28scala.scalanative.unsafe.PtrL32scala.scalanative.unsigned.ULongL20scala.runtime.IntRefL28scala.scalanative.unsafe.PtruEPT42scala.scalanative.runtime.SymbolFormatter$"), 
-            "scala.scalanative.runtime.SymbolFormatter$.readIdent$1(scala.scalanative.unsafe.Ptr,scala.scalanative.unsigned.ULong,scala.runtime.IntRef): scala.Unit");
-
-        assert_eq!(run("_SM41scalaboot.template.scalatemplate$package$D10$anonfun$3L26scalaboot.template.ContextL15scala.Function1L23java.lang.StringBuilderL31scalaboot.template.UnsafeCursorL23scalaboot.template.MoveuEPT41scalaboot.template.scalatemplate$package$"), "")
+        assert_eq!(run("_SM41scalaboot.template.scalatemplate$package$D10$anonfun$3L26scalaboot.template.ContextL15scala.Function1L23java.lang.StringBuilderL31scalaboot.template.UnsafeCursorL23scalaboot.template.MoveuEPT41scalaboot.template.scalatemplate$package$"), 
+            "scalaboot.template.scalatemplate$package$.<private[scalaboot.template.scalatemplate$package$]>$anonfun$3(scalaboot.template.Context,scala.Function1,java.lang.StringBuilder,scalaboot.template.UnsafeCursor): scala.Unit")
     }
 }
