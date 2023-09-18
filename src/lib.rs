@@ -1,19 +1,16 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 pub type ParsingResult = Result<String, String>;
 
-pub fn demangle(input: &str) -> ParsingResult {
+pub fn scala_native_demangle(input: &str) -> ParsingResult {
     if !input.starts_with("_S") {
         return Err("identifier doesn't start with _S".to_string());
     } else {
+        //println!("demangle: {}", &input[2..]);
         return defn_name(&input[2..]);
     }
 }
 
 fn defn_name(input: &str) -> ParsingResult {
-    println!("defn_name: {}", input);
+    //println!("defn_name: {}", input);
     if input.starts_with("T") {
         return toplevel_name(&input[1..]);
     } else if input.starts_with("M") {
@@ -31,11 +28,11 @@ fn defn_name(input: &str) -> ParsingResult {
 }
 
 fn toplevel_name(input: &str) -> ParsingResult {
-    println!("toplevel_name: {}", input);
+    //println!("toplevel_name: {}", input);
     return name(input).1;
 }
 fn member_name(input: &str) -> ParsingResult {
-    println!("member_name: {}", input);
+    //println!("member_name: {}", input);
     let (consumed, owner) = name(input);
     let signature = sig_name(&input[consumed..]);
 
@@ -45,19 +42,14 @@ fn member_name(input: &str) -> ParsingResult {
 }
 
 fn sig_name(input: &str) -> ParsingResult {
-    println!("sig_name: {}", input);
+    //println!("sig_name: {}", input);
     if input.starts_with("C") || input.starts_with("G") {
         return name(&input[1..]).1;
     } else if input.starts_with("F") {
         let (consumed, field_name) = name(&input[1..]);
         return field_name.and_then(|nm| {
             let rest = &input[(1 + consumed)..];
-            return scope(rest).map(|sc| match sc {
-                Scope::Private(defn_scope) => return format!("<private[{}]>{}", defn_scope, nm),
-                Scope::Public => {
-                    return nm;
-                }
-            });
+            return scope(rest).map(|sc| format!("{}{}", render_scope(sc), nm));
         });
     } else if input.starts_with("R") {
         let type_names = read_type_names(&input[1..]);
@@ -66,7 +58,7 @@ fn sig_name(input: &str) -> ParsingResult {
         let after_tag = &input[1..];
         let (consumed, nm) = name(after_tag);
 
-        let after_name = &after_tag[(consumed - 1)..];
+        let after_name = &after_tag[consumed..];
         let (consumed, type_names) = read_type_names(after_name);
 
         let after_types = &after_name[consumed + 1..];
@@ -76,9 +68,10 @@ fn sig_name(input: &str) -> ParsingResult {
             nm.and_then(|nm| {
                 sc.map(|sc| {
                     let signature = match tn.len() {
-                        1 => format!("{}: {}", nm, tn.join(",")),
+                        1 => format!("{}{}: {}", render_scope(sc), nm, tn.join(",")),
                         n => format!(
-                            "{}({}): {}",
+                            "{}{}({}): {}",
+                            render_scope(sc),
                             nm,
                             tn[0..n - 2].join(","),
                             tn.get(n - 1).unwrap()
@@ -89,7 +82,6 @@ fn sig_name(input: &str) -> ParsingResult {
                 })
             })
         })
-        // format!("{}({})", nm, tn.join(","))})))
 
         // return type_names.map(|vc| format!("{}({})", nm.unwrap(), vc.join(",")));
     } else {
@@ -100,7 +92,7 @@ fn sig_name(input: &str) -> ParsingResult {
 }
 
 fn read_type_names(input: &str) -> (usize, Result<Vec<String>, String>) {
-    let mut pos = 1;
+    let mut pos = 0;
     let mut result = Vec::new();
     while !input[pos..].starts_with("E") {
         let (consumed, nm) = type_name(&input[pos..]);
@@ -113,7 +105,7 @@ fn read_type_names(input: &str) -> (usize, Result<Vec<String>, String>) {
 
 fn type_name(input: &str) -> (usize, ParsingResult) {
     let mut chars = input.chars();
-    println!("type_name: {}", input);
+    //println!("type_name: {}", input);
 
     let result = match chars.next() {
         Some('v') => (1, Ok("<c vararg>".to_string())),
@@ -142,6 +134,7 @@ fn type_name(input: &str) -> (usize, ParsingResult) {
             let (consumed, tn) = type_name(&input[1..]);
             let after_type_name = &input[1 + consumed..];
             let num = number(after_type_name);
+            //println!("number: {}", num);
             (
                 consumed + num + 1, /* "_" at the end */
                 tn.map(|t| format!("CArray[{}]", t)),
@@ -159,11 +152,12 @@ fn number(input: &str) -> usize {
 }
 
 fn nullable_type_name(input: &str) -> (usize, ParsingResult) {
+    //println!("nullable_type_name: {}", input);
     let mut chars = input.chars();
 
     match chars.next() {
         Some('A') => {
-            let (consumed, n) = type_name(input);
+            let (consumed, n) = type_name(&input[1..]);
 
             return (consumed + 2, n.map(|ar| format!("Array[{}]", ar)));
         }
@@ -184,8 +178,15 @@ enum Scope {
     Private(String),
 }
 
+fn render_scope(scope: Scope) -> String {
+    return match scope {
+        Scope::Public => "".to_string(),
+        Scope::Private(inn) => format!("<private[{}]>", inn),
+    };
+}
+
 fn scope(input: &str) -> Result<Scope, String> {
-    println!("scope: {}", input);
+    //println!("scope: {}", input);
     if input.starts_with("O") {
         return Ok(Scope::Public);
     } else if input.starts_with("P") {
@@ -196,7 +197,7 @@ fn scope(input: &str) -> Result<Scope, String> {
 }
 
 fn name(input: &str) -> (usize, ParsingResult) {
-    println!("name: {}", input);
+    //println!("name: {}", input);
     let mut number_end: usize = 0;
     for c in input.chars() {
         if c.is_digit(10) {
@@ -233,7 +234,7 @@ mod tests {
     use super::*;
 
     fn run(s: &str) -> String {
-        return demangle(s).unwrap();
+        return scala_native_demangle(s).unwrap();
     }
 
     #[test]
@@ -248,6 +249,8 @@ mod tests {
             "scala.scalanative.runtime.SymbolFormatter$.inBounds$1(scala.scalanative.unsigned.ULong): scala.Boolean");
 
         assert_eq!(run("_SM42scala.scalanative.runtime.SymbolFormatter$D11readIdent$1L28scala.scalanative.unsafe.PtrL32scala.scalanative.unsigned.ULongL20scala.runtime.IntRefL28scala.scalanative.unsafe.PtruEPT42scala.scalanative.runtime.SymbolFormatter$"), 
-            "scala.scalanative.runtime.SymbolFormatter$.readIdent$1(scala.scalanative.unsafe.Ptr,scala.scalanative.unsigned.ULong,scala.runtime.IntRef): scala.Unit")
+            "scala.scalanative.runtime.SymbolFormatter$.readIdent$1(scala.scalanative.unsafe.Ptr,scala.scalanative.unsigned.ULong,scala.runtime.IntRef): scala.Unit");
+
+        assert_eq!(run("_SM41scalaboot.template.scalatemplate$package$D10$anonfun$3L26scalaboot.template.ContextL15scala.Function1L23java.lang.StringBuilderL31scalaboot.template.UnsafeCursorL23scalaboot.template.MoveuEPT41scalaboot.template.scalatemplate$package$"), "")
     }
 }
