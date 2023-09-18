@@ -30,15 +30,12 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
     match &cli.command {
         Commands::File { name } => {
             if let Ok(lines) = read_lines(name) {
-                // Consumes the iterator, returns an (Optional) String
                 for line in lines {
                     if let Ok(ip) = line {
-                        match scala_native_demangle(&ip) {
+                        match scala_native_demangle::demangle(&ip) {
                             Ok(res) => println!("{} = {}", ip, res),
                             Err(e) => println!("{} ERROR {}", ip, e),
                         }
@@ -47,7 +44,7 @@ fn main() {
             }
         }
         Commands::Id { name } => {
-            println!("{}", scala_native_demangle(name).unwrap())
+            println!("{}", scala_native_demangle::demangle(name).unwrap())
         }
     }
 }
