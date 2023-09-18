@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use scala_native_demangle::scala_native_demangle;
+use scala_native_demangle;
 
 use clap::{Parser, Subcommand};
 
