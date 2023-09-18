@@ -4,8 +4,8 @@ version = "0.0.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "Demangle Scala Native identifiers"
-homepage = "https://github.com/indoorvivants/scala-native-demangle"
-repository = "https://github.com/indoorvivants/scala-native-demangle"
+homepage = "https://github.com/indoorvivants/scala-native-demangle-rs"
+repository = "https://github.com/indoorvivants/scala-native-demangle-rs"
 readme = "README.md"
 keywords = ["scala", "scala-native", "demangler"]
 
