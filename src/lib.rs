@@ -63,6 +63,28 @@ fn sig_name(input: &str) -> ParsingResult {
     } else if input.starts_with("R") {
         let type_names = read_type_names(&input[1..]);
         return type_names.1.map(|vc| vc.join(", "));
+    } else if input.starts_with("P") {
+        let after_tag = &input[1..];
+        let (consumed, nm) = name(after_tag);
+
+        let after_name = &after_tag[consumed..];
+        let (_, type_names) = read_type_names(after_name);
+
+        type_names.and_then(|tn| {
+            nm.map(|nm| {
+                let signature = match tn.len() {
+                    1 => format!("{}: {}", nm, tn.join(",")),
+                    n => format!(
+                        "{}({}): {}",
+                        nm,
+                        tn[0..n - 2].join(","),
+                        tn.get(n - 1).unwrap()
+                    ),
+                };
+
+                return signature;
+            })
+        })
     } else if input.starts_with("D") {
         let after_tag = &input[1..];
         let (consumed, nm) = name(after_tag);
@@ -133,7 +155,11 @@ fn type_name(input: &str) -> (usize, ParsingResult) {
 
         Some('R') => match chars.next() {
             Some('_') => (2, Ok("<c pointer>".to_string())),
-            other => todo!("type_name, R: {:?}", other),
+            Some(c) => (
+                0,
+                Err(format!("type_name: after R expected _, got `{c}` instead").to_string()),
+            ),
+            None => (0, Err("type_name: unexpected end of input".to_string())),
         },
         Some('L') => {
             let (consumed, type_name) = nullable_type_name(&input[1..]);
@@ -143,14 +169,20 @@ fn type_name(input: &str) -> (usize, ParsingResult) {
             let (consumed, tn) = type_name(&input[1..]);
             let after_type_name = &input[1 + consumed..];
             let num = number(after_type_name);
-            //println!("number: {}", num);
             (
                 consumed + num + 1, /* "_" at the end */
                 tn.map(|t| format!("CArray[{}]", t)),
             )
         }
-        Some(other) => todo!("type_name: {:?}", other),
-        None => todo!("handle missing next char"),
+        Some('X') => {
+            let (consumed, class_type_name) = name(&input[1..]);
+            (consumed + 1, class_type_name)
+        }
+        Some(other) => (
+            0,
+            Err(format!("type_name: unexpected start character `{other}`").to_string()),
+        ),
+        None => (0, Err("type_name: unexpected end of input".to_string())),
     };
 
     return result;
@@ -161,13 +193,11 @@ fn number(input: &str) -> usize {
 }
 
 fn nullable_type_name(input: &str) -> (usize, ParsingResult) {
-    //println!("nullable_type_name: {}", input);
     let mut chars = input.chars();
 
     match chars.next() {
         Some('A') => {
             let (consumed, n) = type_name(&input[1..]);
-
             return (consumed + 2, n.map(|ar| format!("Array[{}]", ar)));
         }
         Some('X') => {
@@ -178,7 +208,18 @@ fn nullable_type_name(input: &str) -> (usize, ParsingResult) {
         Some(d) if d.is_digit(10) => {
             return name(input);
         }
-        other => panic!("noooo {:?}", other),
+        Some(a) => {
+            return (
+                0,
+                Err(format!("nullable_type_name: unexpected start `{a}`")),
+            )
+        }
+        None => {
+            return (
+                0,
+                Err("nullable_type_name: unexpected end of input".to_string()),
+            )
+        }
     };
 }
 
