@@ -39,7 +39,8 @@ pub fn demangle(input: &str, config: &DemanglingConfig) -> ParsingResult {
     if !input.starts_with("_S") {
         return Err("identifier doesn't start with _S".to_string());
     } else {
-        config.log(format!("demangle: {}", &input[2..]).as_str());
+        // config.log(format!("demangle: {}", &input[2..]).as_str());
+        config.log_name("demangle", &input[2..]);
         return defn_name(&input[2..], config);
     }
 }
@@ -92,6 +93,8 @@ fn sig_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
     config.log_name("sig_name", input);
     if input.starts_with("C") || input.starts_with("G") {
         return name(&input[1..], config).1;
+    } else if input.starts_with("I") {
+        return Ok("<clinit>".to_string());
     } else if input.starts_with("F") {
         let (consumed, field_name) = name(&input[1..], config);
         return field_name.and_then(|nm| {
@@ -180,9 +183,11 @@ fn sig_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
             })
         })
     } else {
-        return Err(
-            format!("sig_name: expected to start with F/R/D/P/C/G/K, {}", &input).to_string(),
-        );
+        return Err(format!(
+            "sig_name: expected to start with F/R/D/P/C/G/K/I, {}",
+            &input
+        )
+        .to_string());
     }
 }
 
@@ -345,6 +350,7 @@ enum Scope {
     Public,
     PublicStatic,
     Private(String),
+    PrivateStatic(String),
 }
 
 fn render_scope(scope: Scope) -> String {
@@ -352,6 +358,7 @@ fn render_scope(scope: Scope) -> String {
         Scope::Public => "".to_string(),
         Scope::PublicStatic => "".to_string(),
         Scope::Private(inn) => format!("<private[{}]>", inn),
+        Scope::PrivateStatic(inn) => format!("<private[{}]>", inn),
     };
 }
 
@@ -366,6 +373,8 @@ fn scope(input: &str, config: &DemanglingConfig) -> Result<Scope, String> {
         return Ok(Scope::PublicStatic);
     } else if input.starts_with("P") {
         return defn_name(&input[1..], config).map(|i| return Scope::Private(i));
+    } else if input.starts_with("p") {
+        return defn_name(&input[1..], config).map(|i| return Scope::PrivateStatic(i));
     } else {
         return Err(format!("scope: cannot read `{}`", input).to_string());
     }
@@ -450,6 +459,16 @@ mod tests {
 
         assert_eq!(run("_SM33scala.scalanative.unsafe.package$D11fromCStringL28scala.scalanative.unsafe.PtrL24java.nio.charset.CharsetL16java.lang.StringEO"), "scala.scalanative.unsafe.package$.fromCString(scala.scalanative.unsafe.Ptr,java.nio.charset.Charset): String");
 
-        assert_eq!(run("_SM17java.lang.IntegerD7compareiiiEo"), "java.lang.Integer.compare(Int,Int): Int")
+        assert_eq!(
+            run("_SM17java.lang.IntegerD7compareiiiEo"),
+            "java.lang.Integer.compare(Int,Int): Int"
+        );
+
+        assert_eq!(
+            run("_SM38scala.scalanative.junit.JUnitFrameworkIE"),
+            "scala.scalanative.junit.JUnitFramework.<clinit>"
+        );
+
+        assert_eq!(run("_SM10fansi.TrieD17$init$$$anonfun$5cLAL10fansi.Trie_L12scala.Tuple2uEpT10fansi.Trie"), "fansi.Trie.<private[fansi.Trie]>$init$$$anonfun$5(Char,Array[fansi.Trie],scala.Tuple2): Unit")
     }
 }

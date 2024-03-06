@@ -19,7 +19,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Process a file of mangled identifiers, outputting results inline, separating mangled/unmangled names via ` = `
-    File { name: String, debug: bool },
+    File {
+        name: String,
+        #[arg(long)]
+        debug: bool,
+    },
     Id {
         name: String,
         #[arg(long)]
@@ -50,6 +54,7 @@ fn main() {
             }
         }
         Commands::Id { name, debug } => {
+            println!("{}", name);
             println!(
                 "{}",
                 scala_native_demangle::demangle(
