@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use scala_native_demangle;
+use scala_native_demangle::{self, DemanglingConfig};
 
 use clap::{Parser, Subcommand};
 
@@ -21,9 +21,12 @@ enum Commands {
     /// Process a file of mangled identifiers, outputting results inline, separating mangled/unmangled names via ` = `
     File {
         name: String,
+        debug: bool,
     },
     Id {
         name: String,
+        #[arg(long)]
+        debug: bool,
     },
 }
 
@@ -31,11 +34,11 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::File { name } => {
+        Commands::File { name, debug } => {
             if let Ok(lines) = read_lines(name) {
                 for line in lines {
                     if let Ok(ip) = line {
-                        match scala_native_demangle::demangle(&ip) {
+                        match scala_native_demangle::demangle(&ip, &Default::default()) {
                             Ok(res) => println!("{} = {}", ip, res),
                             Err(e) => println!("{} ERROR {}", ip, e),
                         }
@@ -43,8 +46,18 @@ fn main() {
                 }
             }
         }
-        Commands::Id { name } => {
-            println!("{}", scala_native_demangle::demangle(name).unwrap())
+        Commands::Id { name, debug } => {
+            println!(
+                "{}",
+                scala_native_demangle::demangle(
+                    name,
+                    &DemanglingConfig {
+                        debug: *debug,
+                        ..Default::default()
+                    }
+                )
+                .unwrap()
+            )
         }
     }
 }
