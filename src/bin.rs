@@ -19,10 +19,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Process a file of mangled identifiers, outputting results inline, separating mangled/unmangled names via ` = `
-    File {
-        name: String,
-        debug: bool,
-    },
+    File { name: String, debug: bool },
     Id {
         name: String,
         #[arg(long)]
@@ -38,7 +35,13 @@ fn main() {
             if let Ok(lines) = read_lines(name) {
                 for line in lines {
                     if let Ok(ip) = line {
-                        match scala_native_demangle::demangle(&ip, &Default::default()) {
+                        match scala_native_demangle::demangle(
+                            &ip,
+                            &DemanglingConfig {
+                                debug: *debug,
+                                ..Default::default()
+                            },
+                        ) {
                             Ok(res) => println!("{} = {}", ip, res),
                             Err(e) => println!("{} ERROR {}", ip, e),
                         }
