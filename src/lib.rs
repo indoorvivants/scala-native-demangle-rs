@@ -6,12 +6,17 @@
 //! 2. Scala implementation: https://github.com/indoorvivants/sn-demangler
 
 pub type DemangleError = String;
-pub type ParsingResult = Result<String, DemangleError>;
+pub type ParsingResult<T> = Result<T, DemangleError>;
 
 pub struct DemanglingConfig {
     pub collapse_scala_names: bool,
     pub debug: bool,
 }
+
+static DEFAULT_CONFIG: DemanglingConfig = DemanglingConfig {
+    collapse_scala_names: true,
+    debug: false,
+};
 
 impl Default for DemanglingConfig {
     fn default() -> Self {
@@ -35,21 +40,24 @@ impl DemanglingConfig {
     }
 }
 
-pub fn demangle(input: &str, config: &DemanglingConfig) -> ParsingResult {
+pub fn demangle(input: &str, config: &DemanglingConfig) -> ParsingResult<String> {
     if !input.starts_with("_S") {
         return Err("identifier doesn't start with _S".to_string());
     } else {
-        // config.log(format!("demangle: {}", &input[2..]).as_str());
         config.log_name("demangle", &input[2..]);
         return defn_name(&input[2..], config);
     }
+}
+
+pub fn demangle_with_defaults(input: &str) -> ParsingResult<String> {
+    return demangle(input, &DEFAULT_CONFIG);
 }
 
 // private sub parsers
 // <defn-name> ::=
 //     T <name>                       // top-level name
 //     M <name> <sig-name>            // member name
-fn defn_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
+fn defn_name(input: &str, config: &DemanglingConfig) -> ParsingResult<String> {
     config.log_name("defn_name", input);
     if input.starts_with("T") {
         return toplevel_name(&input[1..], config);
@@ -67,18 +75,16 @@ fn defn_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
     }
 }
 
-fn toplevel_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
+fn toplevel_name(input: &str, config: &DemanglingConfig) -> ParsingResult<String> {
     config.log_name("toplevel_name", input);
-    return name(input, config).1;
+    return name(input, config).map(|t| t.1);
 }
-fn member_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
+fn member_name(input: &str, config: &DemanglingConfig) -> ParsingResult<String> {
     config.log_name("member_name", input);
-    let (consumed, owner) = name(input, config);
+    let (consumed, owner) = name(input, config)?;
     let signature = sig_name(&input[consumed..], config);
 
-    let result =
-        owner.and_then(|ow| return signature.and_then(|s| return Ok(format!("{}.{}", ow, s))));
-    return result;
+    return signature.and_then(|s| return Ok(format!("{}.{}", owner, s)));
 }
 
 // <sig-name> ::=
@@ -89,99 +95,85 @@ fn member_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
 //     C <name>                            // c extern name
 //     G <name>                            // generated name
 //     K <sig-name> <type-name>+ E         // duplicate name
-fn sig_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
+fn sig_name(input: &str, config: &DemanglingConfig) -> ParsingResult<String> {
     config.log_name("sig_name", input);
     if input.starts_with("C") || input.starts_with("G") {
-        return name(&input[1..], config).1;
+        return Ok(name(&input[1..], config)?.1);
     } else if input.starts_with("I") {
         return Ok("<clinit>".to_string());
     } else if input.starts_with("F") {
-        let (consumed, field_name) = name(&input[1..], config);
-        return field_name.and_then(|nm| {
-            let rest = &input[(1 + consumed)..];
-            return scope(rest, config).map(|sc| format!("{}{}", render_scope(sc), nm));
-        });
+        let (consumed, field_name) = name(&input[1..], config)?;
+        // return field_name.and_then(|nm| {
+        let rest = &input[(1 + consumed)..];
+        return scope(rest, config).map(|sc| format!("{}{}", render_scope(sc), field_name));
+        // });
     } else if input.starts_with("R") {
-        let type_names = read_type_names(&input[1..], config);
-        return type_names.1.map(|vc| vc.join(", "));
+        let type_names = read_type_names(&input[1..], config)?;
+        return Ok(type_names.1.join(", "));
     } else if input.starts_with("K") {
         // TODO: basically the same as D case below
         let after_tag = &input[1..];
-        let (consumed, nm) = name(after_tag, config);
+        let (consumed, nm) = name(after_tag, config)?;
 
         let after_name = &after_tag[consumed..];
-        let (_, type_names) = read_type_names(after_name, config);
+        let (_, type_names) = read_type_names(after_name, config)?;
 
-        type_names.and_then(|tn| {
-            nm.map(|nm| {
-                let signature = match tn.len() {
-                    1 => format!("{}: {}", nm, tn.join(",")),
-                    n => format!(
-                        "{}({}): {}",
-                        nm,
-                        tn[0..n - 2].join(","),
-                        tn.get(n - 1).unwrap()
-                    ),
-                };
+        let signature = match type_names.len() {
+            1 => format!("{}: {}", nm, type_names.join(",")),
+            n => format!(
+                "{}({}): {}",
+                nm,
+                type_names[0..n - 2].join(","),
+                type_names.get(n - 1).unwrap_or(&"???".to_string())
+            ),
+        };
 
-                return signature;
-            })
-        })
+        return Ok(signature);
     } else if input.starts_with("P") {
         // TODO: basically the same as D case below
         let after_tag = &input[1..];
-        let (consumed, nm) = name(after_tag, config);
+        let (consumed, nm) = name(after_tag, config)?;
 
         let after_name = &after_tag[consumed..];
-        let (_, type_names) = read_type_names(after_name, config);
+        let (_, type_names) = read_type_names(after_name, config)?;
 
-        type_names.and_then(|tn| {
-            nm.map(|nm| {
-                let signature = match tn.len() {
-                    1 => format!("{}: {}", nm, tn.join(",")),
-                    n => format!(
-                        "{}({}): {}",
-                        nm,
-                        tn[0..n - 2].join(","),
-                        tn.get(n - 1).unwrap()
-                    ),
-                };
+        let signature = match type_names.len() {
+            1 => format!("{}: {}", nm, type_names.join(",")),
+            n => format!(
+                "{}({}): {}",
+                nm,
+                type_names[0..n - 2].join(","),
+                type_names.get(n - 1).unwrap_or(&"???".to_string())
+            ),
+        };
 
-                return signature;
-            })
-        })
+        return Ok(signature);
     } else if input.starts_with("D") {
         let after_tag = &input[1..];
-        let (consumed, nm) = name(after_tag, config);
+        let (consumed, nm) = name(after_tag, config)?;
 
         let after_name = &after_tag[consumed..];
-        let (consumed, type_names) = read_type_names(after_name, config);
+        let (consumed, type_names) = read_type_names(after_name, config)?;
 
         let after_types = &after_name[consumed + 1..];
         config.log_name(
             "sig_name:D",
             format!("type_names: {type_names:?}, after: {after_types}").as_str(),
         );
-        let sc = scope(&after_types, config);
+        let sc = scope(&after_types, config)?;
 
-        type_names.and_then(|tn| {
-            nm.and_then(|nm| {
-                sc.map(|sc| {
-                    let signature = match tn.len() {
-                        1 => format!("{}{}: {}", render_scope(sc), nm, tn.join(",")),
-                        n => format!(
-                            "{}{}({}): {}",
-                            render_scope(sc),
-                            nm,
-                            tn[0..n - 1].join(","),
-                            tn.get(n - 1).unwrap()
-                        ),
-                    };
+        let signature = match type_names.len() {
+            1 => format!("{}{}: {}", render_scope(sc), nm, type_names.join(",")),
+            n => format!(
+                "{}{}({}): {}",
+                render_scope(sc),
+                nm,
+                type_names[0..n - 1].join(","),
+                type_names.get(n - 1).unwrap_or(&"???".to_string())
+            ),
+        };
 
-                    return signature;
-                })
-            })
-        })
+        return Ok(signature);
     } else {
         return Err(format!(
             "sig_name: expected to start with F/R/D/P/C/G/K/I, {}",
@@ -191,16 +183,16 @@ fn sig_name(input: &str, config: &DemanglingConfig) -> ParsingResult {
     }
 }
 
-fn read_type_names(input: &str, config: &DemanglingConfig) -> (usize, Result<Vec<String>, String>) {
+fn read_type_names(input: &str, config: &DemanglingConfig) -> ParsingResult<(usize, Vec<String>)> {
     let mut pos = 0;
     let mut result = Vec::new();
     while !input[pos..].starts_with("E") {
-        let (consumed, nm) = type_name(&input[pos..], config);
-        result.push(nm.unwrap());
+        let (consumed, nm) = type_name(&input[pos..], config)?;
+        result.push(nm);
         pos += consumed;
     }
 
-    return (pos, Ok(result));
+    return Ok((pos, result));
 }
 
 fn scala_root_name(name: &str, config: &DemanglingConfig) -> String {
@@ -255,7 +247,7 @@ fn common_type_name(name: String, config: &DemanglingConfig) -> String {
 //     A <type-name> _                // nonnull array type-name
 //     X <name>                       // nonnull exact class type-name
 //     <name>                         // nonnull class type-name
-fn type_name(input: &str, config: &DemanglingConfig) -> (usize, ParsingResult) {
+fn type_name(input: &str, config: &DemanglingConfig) -> ParsingResult<(usize, String)> {
     let mut chars = input.chars();
     config.log(format!("type_name: {input}").as_str());
 
@@ -263,49 +255,43 @@ fn type_name(input: &str, config: &DemanglingConfig) -> (usize, ParsingResult) {
     let common_type_namer = |name: String| common_type_name(name, config);
 
     let result = match chars.next() {
-        Some('v') => (1, Ok("<c vararg>".to_string())),
-        Some('z') => (1, Ok(scala_root_namer("Boolean"))),
-        Some('c') => (1, Ok(scala_root_namer("Char"))),
-        Some('f') => (1, Ok(scala_root_namer("Float"))),
-        Some('d') => (1, Ok(scala_root_namer("Double"))),
-        Some('u') => (1, Ok(scala_root_namer("Unit"))),
-        Some('l') => (1, Ok(scala_root_namer("Null"))),
-        Some('n') => (1, Ok(scala_root_namer("Nothing"))),
-        Some('b') => (1, Ok(scala_root_namer("Byte"))),
-        Some('s') => (1, Ok(scala_root_namer("Short"))),
-        Some('i') => (1, Ok(scala_root_namer("Int"))),
-        Some('j') => (1, Ok(scala_root_namer("Long"))),
+        Some('v') => Ok((1, "<c vararg>".to_string())),
+        Some('z') => Ok((1, scala_root_namer("Boolean"))),
+        Some('c') => Ok((1, scala_root_namer("Char"))),
+        Some('f') => Ok((1, scala_root_namer("Float"))),
+        Some('d') => Ok((1, scala_root_namer("Double"))),
+        Some('u') => Ok((1, scala_root_namer("Unit"))),
+        Some('l') => Ok((1, scala_root_namer("Null"))),
+        Some('n') => Ok((1, scala_root_namer("Nothing"))),
+        Some('b') => Ok((1, scala_root_namer("Byte"))),
+        Some('s') => Ok((1, scala_root_namer("Short"))),
+        Some('i') => Ok((1, scala_root_namer("Int"))),
+        Some('j') => Ok((1, scala_root_namer("Long"))),
 
         Some('R') => match chars.next() {
-            Some('_') => (2, Ok("<c pointer>".to_string())),
-            Some(c) => (
-                0,
-                Err(format!("type_name: after R expected _, got `{c}` instead").to_string()),
-            ),
-            None => (0, Err("type_name: unexpected end of input".to_string())),
+            Some('_') => Ok((2, "<c pointer>".to_string())),
+            Some(c) => Err(format!("type_name: after R expected _, got `{c}` instead").to_string()),
+            None => Err("type_name: unexpected end of input".to_string()),
         },
         Some('L') => {
-            let (consumed, type_name) = nullable_type_name(&input[1..], config);
-            (consumed + 1, type_name.map(common_type_namer))
+            let (consumed, type_name) = nullable_type_name(&input[1..], config)?;
+            Ok((consumed + 1, common_type_namer(type_name)))
         }
         Some('A') => {
-            let (consumed, tn) = type_name(&input[1..], config);
+            let (consumed, tn) = type_name(&input[1..], config)?;
             let after_type_name = &input[1 + consumed..];
             let num = number(after_type_name);
-            (
+            Ok((
                 consumed + num + 1, /* "_" at the end */
-                tn.map(|t| format!("CArray[{}]", t)),
-            )
+                format!("CArray[{}]", tn),
+            ))
         }
         Some('X') => {
-            let (consumed, class_type_name) = name(&input[1..], config);
-            (consumed + 1, class_type_name)
+            let (consumed, class_type_name) = name(&input[1..], config)?;
+            Ok((consumed + 1, class_type_name))
         }
-        Some(other) => (
-            0,
-            Err(format!("type_name: unexpected start character `{other}`").to_string()),
-        ),
-        None => (0, Err("type_name: unexpected end of input".to_string())),
+        Some(other) => Err(format!("type_name: unexpected start character `{other}`").to_string()),
+        None => Err("type_name: unexpected end of input".to_string()),
     };
 
     return result;
@@ -315,34 +301,24 @@ fn number(input: &str) -> usize {
     return input.chars().take_while(|c| c.is_digit(10)).count();
 }
 
-fn nullable_type_name(input: &str, config: &DemanglingConfig) -> (usize, ParsingResult) {
+fn nullable_type_name(input: &str, config: &DemanglingConfig) -> ParsingResult<(usize, String)> {
     let mut chars = input.chars();
 
     match chars.next() {
         Some('A') => {
-            let (consumed, n) = type_name(&input[1..], config);
-            return (consumed + 2, n.map(|ar| format!("Array[{}]", ar)));
+            let (consumed, ar) = type_name(&input[1..], config)?;
+            return Ok((consumed + 2, format!("Array[{}]", ar)));
         }
         Some('X') => {
-            let (consumed, n) = name(input, config);
+            let (consumed, n) = name(input, config)?;
 
-            return (consumed + 1, n);
+            return Ok((consumed + 1, n));
         }
         Some(d) if d.is_digit(10) => {
             return name(input, config);
         }
-        Some(a) => {
-            return (
-                0,
-                Err(format!("nullable_type_name: unexpected start `{a}`")),
-            )
-        }
-        None => {
-            return (
-                0,
-                Err("nullable_type_name: unexpected end of input".to_string()),
-            )
-        }
+        Some(a) => return Err(format!("nullable_type_name: unexpected start `{a}`")),
+        None => return Err("nullable_type_name: unexpected end of input".to_string()),
     };
 }
 
@@ -380,7 +356,7 @@ fn scope(input: &str, config: &DemanglingConfig) -> Result<Scope, String> {
     }
 }
 
-fn name(input: &str, config: &DemanglingConfig) -> (usize, ParsingResult) {
+fn name(input: &str, config: &DemanglingConfig) -> ParsingResult<(usize, String)> {
     //println!("name: {}", input);
     config.log_name("name", input);
     let mut number_end: usize = 0;
@@ -397,20 +373,17 @@ fn name(input: &str, config: &DemanglingConfig) -> (usize, ParsingResult) {
         match usize::from_str_radix(length, 10) {
             Ok(res) => {
                 if rest.starts_with("-") {
-                    return (length.len() + 1 + res, Ok(rest[1..(1 + res)].to_string()));
+                    return Ok((length.len() + 1 + res, rest[1..(1 + res)].to_string()));
                 } else {
-                    return (length.len() + res, Ok(rest[0..res].to_string()));
+                    return Ok((length.len() + res, rest[0..res].to_string()));
                 }
             }
             Err(_) => {
-                return (0, Err("name: invalid length".to_string()));
+                return Err("name: invalid length".to_string());
             }
         }
     } else {
-        return (
-            0,
-            Err(format!("name: invalid input `{}`", input.to_string())),
-        );
+        return Err(format!("name: invalid input `{}`", input.to_string()));
     }
 }
 
