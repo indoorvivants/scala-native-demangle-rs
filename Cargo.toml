@@ -15,9 +15,8 @@ keywords = ["scala", "scala-native", "demangler"]
 name = "scala_native_demangle"
 path = "src/lib.rs"
 
-[[bin]]
-name = "scala_native_demangle_cli"
-path = "src/bin.rs"
+[[example]]
+name = "cli"
 
-[dependencies]
+[dev-dependencies]
 clap = { version = "4.4.3", features = ["derive"] }
